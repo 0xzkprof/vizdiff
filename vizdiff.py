@@ -42,38 +42,60 @@ def read_file_lines(filename: str) -> List[str]:
 
 def highlight_char_differences(line1: str, line2: str) -> Tuple[str, str]:
     """Highlight blocks of characters that were changed between two lines.
-    Both sides will highlight the same character positions when replacements occur."""
-    # Use SequenceMatcher to find character-level differences
-    matcher = difflib.SequenceMatcher(None, line1, line2)
+    Groups nearby changes and ensures both sides highlight the same positions."""
     
+    if len(line1) != len(line2):
+        # If lengths differ, just highlight everything (shouldn't happen in your use case)
+        return (f"{Colors.BG_YELLOW}{Colors.BLACK}{line1}{Colors.END}",
+                f"{Colors.BG_YELLOW}{Colors.BLACK}{line2}{Colors.END}")
+    
+    # Find all positions where characters differ
+    diff_positions = []
+    for i in range(min(len(line1), len(line2))):
+        if line1[i] != line2[i]:
+            diff_positions.append(i)
+    
+    if not diff_positions:
+        return line1, line2
+    
+    # Group nearby differences (within 2 characters of each other)
+    groups = []
+    current_group = [diff_positions[0]]
+    
+    for pos in diff_positions[1:]:
+        if pos - current_group[-1] <= 2:  # Group if within 2 characters
+            current_group.append(pos)
+        else:
+            groups.append(current_group)
+            current_group = [pos]
+    groups.append(current_group)
+    
+    # Convert groups to ranges (start, end)
+    ranges = []
+    for group in groups:
+        start = group[0]
+        end = group[-1] + 1  # +1 to make it inclusive
+        ranges.append((start, end))
+    
+    # Build the highlighted strings
     result1 = []
     result2 = []
+    last_end = 0
     
-    for tag, i1, i2, j1, j2 in matcher.get_opcodes():
-        if tag == 'equal':
-            result1.append(line1[i1:i2])
-            result2.append(line2[j1:j2])
-        elif tag == 'delete':
-            # For pure deletions, highlight on left side only
-            result1.append(f"{Colors.BG_YELLOW}{Colors.BLACK}{line1[i1:i2]}{Colors.END}")
-            # Don't add anything to result2 for deletions
-        elif tag == 'insert':
-            # For pure insertions, highlight on right side only
-            result2.append(f"{Colors.BG_YELLOW}{Colors.BLACK}{line2[j1:j2]}{Colors.END}")
-            # Don't add anything to result1 for insertions
-        elif tag == 'replace':
-            # For replacements, we need to highlight the same span on both sides
-            # Use the maximum length to ensure both sides highlight the same positions
-            left_text = line1[i1:i2]
-            right_text = line2[j1:j2]
-            max_len = max(len(left_text), len(right_text))
-            
-            # Pad the shorter text with spaces to make highlighting regions the same size
-            left_padded = left_text.ljust(max_len)
-            right_padded = right_text.ljust(max_len)
-            
-            result1.append(f"{Colors.BG_YELLOW}{Colors.BLACK}{left_padded}{Colors.END}")
-            result2.append(f"{Colors.BG_YELLOW}{Colors.BLACK}{right_padded}{Colors.END}")
+    for start, end in ranges:
+        # Add unchanged text before this range
+        result1.append(line1[last_end:start])
+        result2.append(line2[last_end:start])
+        
+        # Add highlighted changed text
+        result1.append(f"{Colors.BG_YELLOW}{Colors.BLACK}{line1[start:end]}{Colors.END}")
+        result2.append(f"{Colors.BG_YELLOW}{Colors.BLACK}{line2[start:end]}{Colors.END}")
+        
+        last_end = end
+    
+    # Add any remaining unchanged text
+    result1.append(line1[last_end:])
+    result2.append(line2[last_end:])
     
     return ''.join(result1), ''.join(result2)
 
