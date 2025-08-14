@@ -124,6 +124,9 @@ def wrap_line(line: str, width: int) -> List[str]:
             i = end
         else:
             if visible_length >= width:
+                # Ensure we reset formatting at the end of each wrapped line
+                if '\033[' in current_line and not current_line.endswith(Colors.END):
+                    current_line += Colors.END
                 wrapped_lines.append(current_line)
                 current_line = ""
                 visible_length = 0
@@ -132,6 +135,9 @@ def wrap_line(line: str, width: int) -> List[str]:
             i += 1
     
     if current_line or not wrapped_lines:
+        # Ensure final line ends with reset if it contains formatting
+        if '\033[' in current_line and not current_line.endswith(Colors.END):
+            current_line += Colors.END
         wrapped_lines.append(current_line)
     
     return wrapped_lines
@@ -192,9 +198,14 @@ def compare_files(file1_path: str, file2_path: str, width: int = 120, no_color: 
             for j, (w1, w2) in enumerate(zip(wrapped1, wrapped2)):
                 if j == 0:  # First line gets the line number and marker
                     line_num = f"{line_num_color}{i:4d}{Colors.END if not no_color else ''}"
-                    print(f"{line_num}{marker} {w1:<{col_width}} | {w2}")
+                    # Ensure proper formatting reset between columns
+                    w1_safe = w1 + (Colors.END if ('\033[' in w1 and not w1.endswith(Colors.END)) else "")
+                    w2_safe = w2 + (Colors.END if ('\033[' in w2 and not w2.endswith(Colors.END)) else "")
+                    print(f"{line_num}{marker} {w1_safe:<{col_width}} | {w2_safe}")
                 else:  # Continuation lines get spaces
-                    print(f"{'':>5} {w1:<{col_width}} | {w2}")
+                    w1_safe = w1 + (Colors.END if ('\033[' in w1 and not w1.endswith(Colors.END)) else "")
+                    w2_safe = w2 + (Colors.END if ('\033[' in w2 and not w2.endswith(Colors.END)) else "")
+                    print(f"{'':>5} {w1_safe:<{col_width}} | {w2_safe}")
         else:
             # Lines are identical
             wrapped = wrap_line(line1, col_width)
@@ -203,9 +214,11 @@ def compare_files(file1_path: str, file2_path: str, width: int = 120, no_color: 
             for j, w_line in enumerate(wrapped):
                 if j == 0:  # First line gets the line number
                     line_num = f"{i:4d} "
-                    print(f"{line_num} {w_line:<{col_width}} | {w_line}")
+                    w_safe = w_line + (Colors.END if ('\033[' in w_line and not w_line.endswith(Colors.END)) else "")
+                    print(f"{line_num} {w_safe:<{col_width}} | {w_safe}")
                 else:  # Continuation lines
-                    print(f"{'':>5} {w_line:<{col_width}} | {w_line}")
+                    w_safe = w_line + (Colors.END if ('\033[' in w_line and not w_line.endswith(Colors.END)) else "")
+                    print(f"{'':>5} {w_safe:<{col_width}} | {w_safe}")
     
     # Print summary
     print("=" * width)
