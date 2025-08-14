@@ -21,7 +21,8 @@ class Colors:
     BOLD = '\033[1m'
     UNDERLINE = '\033[4m'
     END = '\033[0m'
-    
+    BLACK = '\033[30m'
+
     # Background colors for highlighting differences
     BG_RED = '\033[41m'
     BG_GREEN = '\033[42m'
@@ -40,7 +41,8 @@ def read_file_lines(filename: str) -> List[str]:
         sys.exit(1)
 
 def highlight_char_differences(line1: str, line2: str) -> Tuple[str, str]:
-    """Highlight blocks of characters that were changed between two lines."""
+    """Highlight blocks of characters that were changed between two lines.
+    Both sides will highlight the same character positions when replacements occur."""
     # Use SequenceMatcher to find character-level differences
     matcher = difflib.SequenceMatcher(None, line1, line2)
     
@@ -52,17 +54,26 @@ def highlight_char_differences(line1: str, line2: str) -> Tuple[str, str]:
             result1.append(line1[i1:i2])
             result2.append(line2[j1:j2])
         elif tag == 'delete':
-            # Only highlight if it's part of a replacement, not a pure deletion
-            result1.append(line1[i1:i2])
-            result2.append("")
-        elif tag == 'insert':
-            # Only highlight if it's part of a replacement, not a pure insertion
-            result1.append("")
-            result2.append(line2[j1:j2])
-        elif tag == 'replace':
-            # This is what we want to highlight - changed blocks
+            # For pure deletions, highlight on left side only
             result1.append(f"{Colors.BG_YELLOW}{Colors.BLACK}{line1[i1:i2]}{Colors.END}")
+            # Don't add anything to result2 for deletions
+        elif tag == 'insert':
+            # For pure insertions, highlight on right side only
             result2.append(f"{Colors.BG_YELLOW}{Colors.BLACK}{line2[j1:j2]}{Colors.END}")
+            # Don't add anything to result1 for insertions
+        elif tag == 'replace':
+            # For replacements, we need to highlight the same span on both sides
+            # Use the maximum length to ensure both sides highlight the same positions
+            left_text = line1[i1:i2]
+            right_text = line2[j1:j2]
+            max_len = max(len(left_text), len(right_text))
+            
+            # Pad the shorter text with spaces to make highlighting regions the same size
+            left_padded = left_text.ljust(max_len)
+            right_padded = right_text.ljust(max_len)
+            
+            result1.append(f"{Colors.BG_YELLOW}{Colors.BLACK}{left_padded}{Colors.END}")
+            result2.append(f"{Colors.BG_YELLOW}{Colors.BLACK}{right_padded}{Colors.END}")
     
     return ''.join(result1), ''.join(result2)
 
