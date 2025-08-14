@@ -63,14 +63,44 @@ def highlight_char_differences(line1: str, line2: str) -> Tuple[str, str]:
     
     return ''.join(result1), ''.join(result2)
 
-def truncate_line(line: str, max_width: int) -> str:
-    """Truncate line if it's too long, preserving color codes."""
-    # Simple truncation - could be improved to handle ANSI codes better
-    if len(line) > max_width:
-        return line[:max_width-3] + "..."
-    return line
+def wrap_line(line: str, width: int) -> List[str]:
+    """Wrap a line to fit within specified width, preserving ANSI color codes."""
+    if not line:
+        return ['']
+    
+    # For lines with ANSI codes, we need to be more careful about wrapping
+    # This is a simplified approach - we'll wrap based on visible characters
+    wrapped_lines = []
+    current_line = ""
+    visible_length = 0
+    i = 0
+    
+    while i < len(line):
+        if line[i:i+1] == '\033':  # ANSI escape sequence start
+            # Find the end of the ANSI sequence
+            end = i + 1
+            while end < len(line) and line[end] not in ['m', 'H', 'J', 'K']:
+                end += 1
+            if end < len(line):
+                end += 1
+            # Add the entire ANSI sequence without counting its length
+            current_line += line[i:end]
+            i = end
+        else:
+            if visible_length >= width:
+                wrapped_lines.append(current_line)
+                current_line = ""
+                visible_length = 0
+            current_line += line[i]
+            visible_length += 1
+            i += 1
+    
+    if current_line or not wrapped_lines:
+        wrapped_lines.append(current_line)
+    
+    return wrapped_lines
 
-def compare_files(file1_path: str, file2_path: str, width: int = 80, no_color: bool = False):
+def compare_files(file1_path: str, file2_path: str, width: int = 120, no_color: bool = False):
     """Compare two files and display side by side with highlighted differences."""
     
     # Read files
@@ -82,15 +112,15 @@ def compare_files(file1_path: str, file2_path: str, width: int = 80, no_color: b
     lines1 += [''] * (max_lines - len(lines1))
     lines2 += [''] * (max_lines - len(lines2))
     
-    # Calculate column width
-    col_width = (width - 5) // 2  # 5 chars for separator and line numbers
+    # Calculate column width (leave space for line numbers and separator)
+    col_width = (width - 7) // 2  # 7 chars for line numbers, marker, and separator
     
     # Print header
     header1 = f"{Colors.BOLD}{file1_path}{Colors.END}" if not no_color else file1_path
     header2 = f"{Colors.BOLD}{file2_path}{Colors.END}" if not no_color else file2_path
     
     print("=" * width)
-    print(f"{header1:<{col_width}} | {header2}")
+    print(f"{'':>5} {header1:<{col_width}} | {header2}")
     print("=" * width)
     
     # Compare and display lines
@@ -106,25 +136,40 @@ def compare_files(file1_path: str, file2_path: str, width: int = 80, no_color: b
             if not no_color:
                 # Highlight character-level differences
                 highlighted1, highlighted2 = highlight_char_differences(line1, line2)
-                
-                # Line number with color
-                line_num = f"{Colors.YELLOW}{i:4d}{Colors.END}"
+                line_num_color = Colors.YELLOW
+                marker = f"{Colors.RED}*{Colors.END}"
             else:
                 highlighted1, highlighted2 = line1, line2
-                line_num = f"{i:4d}"
+                line_num_color = ""
+                marker = "*"
             
-            # Truncate if necessary
-            display1 = truncate_line(highlighted1, col_width)
-            display2 = truncate_line(highlighted2, col_width)
+            # Wrap lines if they're too long
+            wrapped1 = wrap_line(highlighted1, col_width)
+            wrapped2 = wrap_line(highlighted2, col_width)
             
-            # Print with difference marker
-            marker = f"{Colors.RED}*{Colors.END}" if not no_color else "*"
-            print(f"{line_num}{marker} {display1:<{col_width}} | {display2}")
+            # Make both wrapped lists the same length
+            max_wrapped = max(len(wrapped1), len(wrapped2))
+            wrapped1 += [''] * (max_wrapped - len(wrapped1))
+            wrapped2 += [''] * (max_wrapped - len(wrapped2))
+            
+            # Print all wrapped lines
+            for j, (w1, w2) in enumerate(zip(wrapped1, wrapped2)):
+                if j == 0:  # First line gets the line number and marker
+                    line_num = f"{line_num_color}{i:4d}{Colors.END if not no_color else ''}"
+                    print(f"{line_num}{marker} {w1:<{col_width}} | {w2}")
+                else:  # Continuation lines get spaces
+                    print(f"{'':>5} {w1:<{col_width}} | {w2}")
         else:
             # Lines are identical
-            display_line = truncate_line(line1, col_width)
-            line_num = f"{i:4d} "
-            print(f"{line_num} {display_line:<{col_width}} | {display_line}")
+            wrapped = wrap_line(line1, col_width)
+            
+            # Print all wrapped lines
+            for j, w_line in enumerate(wrapped):
+                if j == 0:  # First line gets the line number
+                    line_num = f"{i:4d} "
+                    print(f"{line_num} {w_line:<{col_width}} | {w_line}")
+                else:  # Continuation lines
+                    print(f"{'':>5} {w_line:<{col_width}} | {w_line}")
     
     # Print summary
     print("=" * width)
@@ -141,6 +186,7 @@ def compare_files(file1_path: str, file2_path: str, width: int = 80, no_color: b
         print(f"  {Colors.BG_RED}Red background{Colors.END}: Content removed/changed in left file")
         print(f"  {Colors.BG_GREEN}Green background{Colors.END}: Content added/changed in right file")
         print(f"  {Colors.RED}*{Colors.END}: Line number marker for differing lines")
+        print(f"  Continuation lines are indented without line numbers")
 
 def main():
     parser = argparse.ArgumentParser(
