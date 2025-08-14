@@ -40,7 +40,7 @@ def read_file_lines(filename: str) -> List[str]:
         sys.exit(1)
 
 def highlight_char_differences(line1: str, line2: str) -> Tuple[str, str]:
-    """Highlight character-level differences between two lines."""
+    """Highlight blocks of characters that were changed between two lines."""
     # Use SequenceMatcher to find character-level differences
     matcher = difflib.SequenceMatcher(None, line1, line2)
     
@@ -52,14 +52,17 @@ def highlight_char_differences(line1: str, line2: str) -> Tuple[str, str]:
             result1.append(line1[i1:i2])
             result2.append(line2[j1:j2])
         elif tag == 'delete':
-            result1.append(f"{Colors.BG_RED}{line1[i1:i2]}{Colors.END}")
+            # Only highlight if it's part of a replacement, not a pure deletion
+            result1.append(line1[i1:i2])
             result2.append("")
         elif tag == 'insert':
+            # Only highlight if it's part of a replacement, not a pure insertion
             result1.append("")
-            result2.append(f"{Colors.BG_GREEN}{line2[j1:j2]}{Colors.END}")
+            result2.append(line2[j1:j2])
         elif tag == 'replace':
-            result1.append(f"{Colors.BG_RED}{line1[i1:i2]}{Colors.END}")
-            result2.append(f"{Colors.BG_GREEN}{line2[j1:j2]}{Colors.END}")
+            # This is what we want to highlight - changed blocks
+            result1.append(f"{Colors.BG_YELLOW}{Colors.BLACK}{line1[i1:i2]}{Colors.END}")
+            result2.append(f"{Colors.BG_YELLOW}{Colors.BLACK}{line2[j1:j2]}{Colors.END}")
     
     return ''.join(result1), ''.join(result2)
 
@@ -183,8 +186,7 @@ def compare_files(file1_path: str, file2_path: str, width: int = 120, no_color: 
     
     if diff_count > 0 and not no_color:
         print(f"\nLegend:")
-        print(f"  {Colors.BG_RED}Red background{Colors.END}: Content removed/changed in left file")
-        print(f"  {Colors.BG_GREEN}Green background{Colors.END}: Content added/changed in right file")
+        print(f"  {Colors.BG_YELLOW}{Colors.BLACK}Yellow background{Colors.END}: Changed blocks of characters")
         print(f"  {Colors.RED}*{Colors.END}: Line number marker for differing lines")
         print(f"  Continuation lines are indented without line numbers")
 
